@@ -1,14 +1,16 @@
 const dns = require("node:dns");
 dns.setServers(["8.8.8.8", "8.8.4.4"]);
 
-const express = require('express')
+const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion } = require('mongodb');
 dotenv.config();
+
 const uri = process.env.MONGODB_URI;
-const app = express()
-const PORT = process.env.PORT;
+const app = express();
+const PORT = process.env.PORT
+
 app.use(cors());
 app.use(express.json());
 
@@ -28,12 +30,39 @@ async function run() {
     const facilitycollection = db.collection("facilities");
     const bookingCollection = db.collection("bookings");
 
-    app.post('/facility', async (req, res)=>{
-        const facilityData = req.body
-        console.log(facilityData);
-        const result = await facilitycollection.insertOne(facilityData);
+    // GET /facility with Server-side Search and Filter
+    app.get('/facility', async (req, res) => {
+      try {
+        const { search, sportType } = req.query;
+        let query = {};
 
+        // 1. Filter by facility name using $regex (case-insensitive)
+        if (search) {
+          query.name = { $regex: search, $options: "i" };
+        }
+
+        // 2. Filter by sport type using $in
+        if (sportType) {
+          // Splitting by comma supports single values ("Football Turf") 
+          // or multiple values later if you switch to a multi-select checkbox setup
+          const typesArray = sportType.split(",");
+          query.facility_type = { $in: typesArray };
+        }
+
+        const result = await facilitycollection.find(query).toArray();
         res.json(result);
+      } catch (error) {
+        console.error("Error fetching filtered facilities:", error);
+        res.status(500).json({ error: "Failed to fetch facilities data" });
+      }
+    });
+
+    app.post('/facility', async (req, res) => {
+      const facilityData = req.body;
+      console.log(facilityData);
+      const result = await facilitycollection.insertOne(facilityData);
+
+      res.json(result);
     });
 
     await client.db("admin").command({ ping: 1 });
@@ -45,9 +74,9 @@ async function run() {
 run().catch(console.dir);
 
 app.get('/', (req, res) => {
-  res.send('Hello Server World!! Server is running fine.')
-})
+  res.send('Hello Server World!! Server is running fine.');
+});
 
 app.listen(PORT, () => {
-  console.log(`Server Running On Port ${PORT}`)
-})
+  console.log(`Server Running On Port ${PORT}`);
+});
