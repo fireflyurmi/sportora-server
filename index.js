@@ -28,11 +28,13 @@ async function run() {
 
     const db = client.db("sportora");
     const facilitycollection = db.collection("facilities");
+    const bookingCollection = db.collection("bookings");
+    const userCollection = db.collection("user");
 
-    
+    // --- FACILITY API ---
     app.get("/facility", async (req, res) => {
       try {
-        const { search, sportType, owner_email } = req.query;
+        const { search, owner_email } = req.query;
         let query = {};
 
         if (owner_email) {
@@ -56,7 +58,6 @@ async function run() {
       }
     });
 
-    
     app.post("/facility", async (req, res) => {
       try {
         const facilityData = req.body;
@@ -70,7 +71,6 @@ async function run() {
       }
     });
 
-    
     app.get("/facility/:id", async (req, res) => {
       try {
         const { id } = req.params;
@@ -84,7 +84,6 @@ async function run() {
       }
     });
 
-    
     app.patch("/facility/:id", async (req, res) => {
       try {
         const { id } = req.params;
@@ -102,7 +101,6 @@ async function run() {
       }
     });
 
-    
     app.delete("/facility/:id", async (req, res) => {
       try {
         const { id } = req.params;
@@ -118,8 +116,81 @@ async function run() {
       }
     });
 
+    // --- BOOKING API WITH USER METRICS ---
+    app.get("/bookings/:userEmail", async (req, res) => {
+      try {
+        const { userEmail } = req.params;
+        const result = await bookingCollection
+          .find({ userEmail: userEmail })
+          .toArray();
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching bookings:", error);
+        res
+          .status(500)
+          .json({ error: "Failed to fetch matching reservation files." });
+      }
+    });
 
-    // Ping diagnostic check deployment layer validation
+    app.post("/bookings", async (req, res) => {
+      try {
+        const bookingData = req.body;
+        const bookingResult = await bookingCollection.insertOne(bookingData);
+
+        if (bookingData.userEmail) {
+          await userCollection.updateOne(
+            { email: bookingData.userEmail },
+            { $inc: { booking_count: 1 } },
+            { upsert: true },
+          );
+        }
+
+        res.json(bookingResult);
+      } catch (error) {
+        console.error("Error creating booking and updating counter:", error);
+        res
+          .status(500)
+          .json({
+            error: "Failed to write reservation data and update user metrics.",
+          });
+      }
+    });
+
+    app.delete("/bookings/:bookingId", async (req, res) => {
+      try {
+        const { bookingId } = req.params;
+        const booking = await bookingCollection.findOne({
+          _id: new ObjectId(bookingId),
+        });
+
+        if (booking) {
+          const deleteResult = await bookingCollection.deleteOne({
+            _id: new ObjectId(bookingId),
+          });
+
+          if (booking.userEmail) {
+            await userCollection.updateOne(
+              { email: booking.userEmail },
+              { $inc: { booking_count: -1 } },
+            );
+          }
+
+          res.json(deleteResult);
+        } else {
+          res
+            .status(404)
+            .json({ error: "Booking record context target not found." });
+        }
+      } catch (error) {
+        console.error("Error deleting booking asset context:", error);
+        res
+          .status(500)
+          .json({
+            error: "Failed to execute drop process on targeted booking.",
+          });
+      }
+    });
+
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!",
