@@ -103,7 +103,20 @@ async function run() {
     });
 
     
-    
+    app.delete("/facility/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const result = await facilitycollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+        res.json(result);
+      } catch (error) {
+        console.error("Error deleting facility document:", error);
+        res
+          .status(500)
+          .json({ error: "Failed to execute delete transaction routing" });
+      }
+    });
 
 
     // Ping diagnostic check deployment layer validation
