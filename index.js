@@ -9,8 +9,7 @@ dotenv.config();
 
 const uri = process.env.MONGODB_URI;
 const app = express();
-const PORT = process.env.PORT
-
+const PORT = process.env.PORT;
 app.use(cors());
 app.use(express.json());
 
@@ -30,21 +29,17 @@ async function run() {
     const facilitycollection = db.collection("facilities");
     const bookingCollection = db.collection("bookings");
 
-    // GET /facility with Server-side Search and Filter
+
     app.get('/facility', async (req, res) => {
       try {
         const { search, sportType } = req.query;
         let query = {};
 
-        // 1. Filter by facility name using $regex (case-insensitive)
         if (search) {
           query.name = { $regex: search, $options: "i" };
         }
 
-        // 2. Filter by sport type using $in
         if (sportType) {
-          // Splitting by comma supports single values ("Football Turf") 
-          // or multiple values later if you switch to a multi-select checkbox setup
           const typesArray = sportType.split(",");
           query.facility_type = { $in: typesArray };
         }
@@ -64,6 +59,9 @@ async function run() {
 
       res.json(result);
     });
+
+
+    
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
