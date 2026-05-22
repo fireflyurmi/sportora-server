@@ -12,7 +12,16 @@ const uri = process.env.MONGODB_URI;
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+
+app.use(
+  cors({
+    origin: ["http://localhost:3000", "https://sportora-peach.vercel.app"],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
 app.use(express.json());
 
 const client = new MongoClient(uri, {
@@ -23,7 +32,7 @@ const client = new MongoClient(uri, {
   },
 });
 
-const JWKS = createRemoteJWKSet(new URL("http://localhost:3000/api/auth/jwks"));
+const JWKS = createRemoteJWKSet(new URL(`${process.env.CLIENT_URI}/api/auth/jwks`));
 
 // --- Auth Middleware ---
 const verifyToken = async (req, res, next) => {
@@ -36,10 +45,8 @@ const verifyToken = async (req, res, next) => {
 
   const token = authHeader.split(" ")[1];
 
-  
   if (!token || token === "undefined" || token === "null") {
     console.warn("Frontend sent an uninitialized token string. Checking fallbacks.");
-
     
     const fallbackEmail = req.body?.owner_email || req.body?.userEmail || req.query?.email;
     if (fallbackEmail) {
@@ -71,16 +78,12 @@ const verifyToken = async (req, res, next) => {
 
 async function run() {
   try {
-    await client.connect();
-
     const db = client.db("sportora");
     const facilitycollection = db.collection("facilities");
     const bookingCollection = db.collection("bookings");
     const userCollection = db.collection("user");
 
     // --- FACILITY API ---
-
-    
     app.get("/facility", async (req, res) => {
       try {
         const { search, sportType } = req.query;
@@ -102,19 +105,15 @@ async function run() {
       }
     });
 
-    
     app.get("/facility/user/my-facilities", verifyToken, async (req, res) => {
       try {
         const { search } = req.query;
-        
-        
         const verifiedEmail = req.user?.email || req.query?.email;
 
         if (!verifiedEmail) {
           return res.status(400).json({ error: "Invalid token payload or missing user email reference" });
         }
 
-        
         let query = {
           $or: [
             { owner_email: verifiedEmail },
@@ -136,7 +135,6 @@ async function run() {
       }
     });
 
-    
     app.post("/facility", verifyToken, async (req, res) => {
       try {
         const facilityData = req.body;
@@ -160,7 +158,6 @@ async function run() {
       }
     });
 
-    
     app.get("/facility/:id", async (req, res) => {
       try {
         const { id } = req.params;
@@ -171,7 +168,6 @@ async function run() {
       }
     });
 
-    
     app.patch("/facility/:id", verifyToken, async (req, res) => {
       try {
         const { id } = req.params;
@@ -254,7 +250,6 @@ async function run() {
     });
 
     // --- BOOKING API ---
-
     app.get("/bookings/:userEmail", async (req, res) => {
       try {
         const { userEmail } = req.params;
@@ -318,10 +313,9 @@ async function run() {
       }
     });
 
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
-  } finally {
-    // Pipeline active
+    console.log("Database routes initialized completely.");
+  } catch (err) {
+    console.error("Initialization fallback trap caught error:", err);
   }
 }
 run().catch(console.dir);
@@ -330,6 +324,11 @@ app.get("/", (req, res) => {
   res.send("Server is running fine.");
 });
 
-app.listen(PORT, () => {
-  console.log(`Server Running On Port ${PORT}`);
-});
+
+if (process.env.NODE_ENV !== "production") {
+  app.listen(PORT, () => {
+    console.log(`Server Running On Port ${PORT}`);
+  });
+}
+
+module.exports = app;
